@@ -42,7 +42,7 @@ basicConfig(
     format="[%(asctime)s] [%(levelname)s] - %(message)s",  #  [%(filename)s:%(lineno)d]
     datefmt="%d-%b-%y %I:%M:%S %p",
     handlers=[FileHandler("log.txt"), StreamHandler()],
-    level=INFO,
+    level=DEBUG if Config.UPSTREAM_BRANCH == "wzv3-dev" else INFO,
 )
 
 LOGGER = getLogger(__name__)

@@ -523,6 +523,12 @@ class FFMpeg:
                             self._progress_raw = (
                                 self._processed_time * 100
                             ) / self._total_time
+                            LOGGER.debug(
+                                "ffmpeg progress: out_time=%s ptime=%s ttime=%s pct=%s eta=%s",
+                                value, self._processed_time, self._total_time,
+                                self._progress_raw,
+                                (self._total_time - self._processed_time) / self._time_rate if self._total_time else 0,
+                            )
                             if (
                                 hasattr(self._listener, "subsize")
                                 and self._listener.subsize
