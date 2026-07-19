@@ -32,7 +32,6 @@ niquests
 speedtest-cli
 tenacity
 uvicorn
-uvloop>=0.22.1
-python-dotenv
+uvloop
 xattr
 yt-dlp[default,curl-cffi]
