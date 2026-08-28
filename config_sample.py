@@ -18,6 +18,7 @@ STATUS_UPDATE_INTERVAL = 15
 FILELION_API = ""
 STREAMWISH_API = ""
 ALLDEBRID_API_KEY = ""
+ALLDEBRID_NO_SEED_TIMEOUT = 180
 EXCLUDED_EXTENSIONS = ""
 INC_TASK_NOTIFY = False
 YT_DLP_OPTIONS = ""
@@ -31,6 +32,7 @@ WEB_ACCESS_PASSWORD = (
 
 # Hyper Tg Downloader
 HELPER_TOKENS = ""
+STREAM_TOKENS = ""
 USE_HYPER = True
 
 # MegaAPI v4.30
@@ -50,6 +52,7 @@ DISABLE_JD = False
 DISABLE_NZB = False
 DISABLE_RSS = False
 DISABLE_SEARCH = False
+DISABLE_STREAM = False
 DISABLE_YTDLP = False
 
 # Telegraph
@@ -180,7 +183,14 @@ LEECH_CAPTION = ""
 THUMBNAIL_LAYOUT = ""
 
 # Log Channels
-LEECH_DUMP_CHAT = ""
+LEECH_LOG_CHAT = ""
+# Named leech dump chats, selectable per task with the -ud flag.
+# The chosen chat becomes the primary upload destination for the task.
+# Format: {"name": chat_id}
+LEECH_DUMP_CHATS = {
+    # "A": -1001234567890,
+    # "B": -1009876543210,
+}
 LINKS_LOG_ID = ""
 MIRROR_LOG_ID = ""
 

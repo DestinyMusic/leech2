@@ -96,6 +96,7 @@ BOOL_VARS = [
     "DISABLE_RSS",
     "DISABLE_SEARCH",
     "DISABLE_SEED",
+    "DISABLE_STREAM",
     "DISABLE_TORRENTS",
     "DISABLE_YTDLP",
     "DISABLE_MEGA",
@@ -119,6 +120,7 @@ DEFAULT_DESP = {
     "BASE_URL": "Public URL for torrent web file selection. Format: http://ip or http://ip:port.",
     "BOT_TOKEN": "Telegram Bot Token from @BotFather.",
     "HELPER_TOKENS": "Additional bot tokens for parallel task handling.",
+    "STREAM_TOKENS": "Bot tokens dedicated to /stream and /dl. If set, streaming uses these and is isolated from mirror/leech load. Falls back to HELPER_TOKENS.",
     "BOT_MAX_TASKS": "Max tasks (including queued) the bot runs in parallel. 0 = unlimited.",
     "BOT_PM": "Send files/links to bot owner PM. Default: False.",
     "CMD_SUFFIX": "Text appended to all bot commands. Useful for running multiple bot instances.",
@@ -129,6 +131,7 @@ DEFAULT_DESP = {
     "DELETE_LINKS": "Auto-delete source links/messages on task start. Default: False.",
     "DEBRID_LINK_API": "Debrid-link.com API key for premium hoster support.",
     "ALLDEBRID_API_KEY": "AllDebrid API key, used by the -ad flag to unlock links/magnets.",
+    "ALLDEBRID_NO_SEED_TIMEOUT": "Seconds a -ad magnet may stall with no seeders before aborting. 0 = no limit. Default: 180.",
     "DISABLE_TORRENTS": "Disable all torrent downloads. Default: False.",
     "DISABLE_LEECH": "Disable all leech (download to Telegram) tasks. Default: False.",
     "DISABLE_MIRROR": "Disable all mirror (upload to cloud) tasks. Default: False.",
@@ -141,6 +144,7 @@ DEFAULT_DESP = {
     "DISABLE_NZB": "Disable SABnzbd/Usenet downloads. Saves ~100-200MB RAM. Default: False.",
     "DISABLE_RSS": "Disable RSS feed monitoring. Saves CPU cycles. Default: False.",
     "DISABLE_SEARCH": "Disable torrent search plugins. Saves network I/O. Default: False.",
+    "DISABLE_STREAM": "Disable streaming. Stops /stream and the stream server. Default: False.",
     "DISABLE_YTDLP": "Disable YouTube/YT-DLP downloads. Default: False.",
     "EQUAL_SPLITS": "Split files into equal parts of LEECH_SPLIT_SIZE. Default: False.",
     "EXCLUDED_EXTENSIONS": "File extensions to exclude from upload/clone. Space-separated.",
@@ -190,7 +194,8 @@ DEFAULT_DESP = {
     "EXTRACT_LIMIT": "Extracted file size limit in GB. 0 = unlimited.",
     "ARCHIVE_LIMIT": "Archive (zip) size limit in GB. 0 = unlimited.",
     "STORAGE_LIMIT": "Minimum free storage to maintain in GB. Downloads cancelled if exceeded.",
-    "LEECH_DUMP_CHAT": "Chat ID (integer) to dump all leeched files. Leave empty to disable.",
+    "LEECH_LOG_CHAT": "Chat ID (integer) for leech log messages. Leave empty to disable.",
+    "LEECH_DUMP_CHATS": 'Named leech dump chats selectable per task via -ud flag. Dict format: {"name": chat_id}. Example: {"A": -100123}.',
     "LINKS_LOG_ID": "Chat ID for link logging.",
     "MIRROR_LOG_ID": "Chat ID(s) for mirror logs. Space-separated for multiple.",
     "LEECH_PREFIX": "Prefix added to leeched file names.",
@@ -203,6 +208,10 @@ DEFAULT_DESP = {
     "HYPER_THREADS": "Number of parallel download parts (clients). 0 = auto.",
     "HYPER_PIPELINE": "Concurrent GetFile requests per HyperDL part. Default: 4.",
     "HYPER_CHUNK": "HyperDL working chunk size in bytes. Default: 512 * 1024 (512KB).",
+    "STREAM_PIPELINE": "Concurrent GetFile requests for /dl downloads. Default: 8.",
+    "STREAM_CHUNK": "Streaming chunk size in bytes, capped at 1 MiB. Default: 1048576.",
+    "STREAM_PER_CLIENT": "Concurrent playback streams allowed per bot. Raise for more simultaneous viewers, lower if Telegram floods. Default: 6.",
+    "STREAM_GATE": "Process-wide ceiling on concurrent GetFile calls. Default: 96.",
     "CPU_LIMIT": "CPU limit percentage for background services (SABnzbd, JDownloader). Default: 20.",
     "THROTTLE_SERVICES": "Pause services during heavy ops (FFmpeg). auto=low-end only, always, never.",
     "HYDRA_IP": "Hydra API IP address for search.",
@@ -265,6 +274,7 @@ PROTECTED_VARS = {
     "DATABASE_URL",
 }
 RESTART_VARS = {
+    "STREAM_TOKENS",
     "CMD_SUFFIX",
     "OWNER_ID",
     "USER_SESSION_STRING",
@@ -289,6 +299,7 @@ ONOFF_VARS = [
     "DISABLE_NZB",
     "DISABLE_RSS",
     "DISABLE_SEARCH",
+    "DISABLE_STREAM",
     "DISABLE_YTDLP",
 ]
 
@@ -594,16 +605,35 @@ async def edit_variable(_, message, pre_message, key):
                     "Invalid value! MIRROR_LOG_ID must be a valid integer chat ID.",
                 )
                 return await update_buttons(pre_message, "var")
-    elif key == "LEECH_DUMP_CHAT":
+    elif key == "LEECH_LOG_CHAT":
         if value.strip():
             try:
                 value = int(value.strip())
             except ValueError:
                 await send_message(
                     message,
-                    "Invalid value! LEECH_DUMP_CHAT must be a valid integer chat ID.",
+                    "Invalid value! LEECH_LOG_CHAT must be a valid integer chat ID.",
                 )
                 return await update_buttons(pre_message, "var")
+    elif key == "LEECH_DUMP_CHATS":
+        if isinstance(value, str):
+            if value.startswith("{") and value.endswith("}"):
+                try:
+                    value = literal_eval(value)
+                except Exception:
+                    await send_message(message, "Invalid dict format!")
+                    return await update_buttons(pre_message, "var")
+            else:
+                await send_message(
+                    message,
+                    'LEECH_DUMP_CHATS must be a dict. Format: {"A": -100123456}',
+                )
+                return await update_buttons(pre_message, "var")
+        if not isinstance(value, dict):
+            await send_message(
+                message, 'LEECH_DUMP_CHATS must be a dict. Format: {"A": -100123456}'
+            )
+            return await update_buttons(pre_message, "var")
     elif key == "AUTHORIZED_CHATS":
         aid = value.split()
         auth_chats.clear()
@@ -626,6 +656,17 @@ async def edit_variable(_, message, pre_message, key):
         value = str(value)
     elif key == "ALLDEBRID_API_KEY":
         value = str(value)
+    elif key == "ALLDEBRID_NO_SEED_TIMEOUT":
+        try:
+            value = int(value)
+            if value < 0:
+                raise ValueError
+        except ValueError:
+            await send_message(
+                message,
+                "Invalid value! ALLDEBRID_NO_SEED_TIMEOUT must be 0 (no limit) or seconds.",
+            )
+            return await update_buttons(pre_message, "var")
     elif value.isdigit():
         value = int(value)
     elif value.startswith("[") and value.endswith("]"):
@@ -749,6 +790,15 @@ async def _handle_service_toggle(key, disabled):
                 LOGGER.info("SABnzbd stopped via Module Settings")
         else:
             LOGGER.info("SABnzbd requires restart to re-enable")
+    elif key == "DISABLE_STREAM":
+        from ..core.stream_server import spawn_stream_server, stop_stream_server
+
+        if disabled:
+            await stop_stream_server()
+            LOGGER.info("Stream server stopped via Module Settings")
+        else:
+            spawn_stream_server()
+            LOGGER.info("Stream server started via Module Settings")
     elif key == "DISABLE_RSS":
         if disabled:
             if scheduler.running:
